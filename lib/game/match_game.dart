@@ -39,6 +39,21 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
   GameStatus status = GameStatus.playing;
   bool _busy = false; // 结算中禁止输入
 
+  GameMode get mode => level.mode;
+
+  /// 限时模式剩余秒数。
+  late double timeLeft = (level.timeLimit ?? 0).toDouble();
+  int _lastWholeSecond = -1;
+
+  /// 收集模式进度：颜色 -> 已收集数量。
+  final Map<CandyColor, int> collected = {};
+
+  bool get collectDone {
+    final goals = level.collectGoals;
+    if (goals == null) return false;
+    return goals.entries.every((e) => (collected[e.key] ?? 0) >= e.value);
+  }
+
   // 道具
   BoosterType? armedBooster;
   Map<BoosterType, int> boosterCounts = {
@@ -145,6 +160,16 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
   @override
   void update(double dt) {
     super.update(dt);
+    // 限时模式倒计时
+    if (mode == GameMode.timed && status == GameStatus.playing) {
+      timeLeft = max(0, timeLeft - dt);
+      final whole = timeLeft.ceil();
+      if (whole != _lastWholeSecond) {
+        _lastWholeSecond = whole;
+        onStateChanged();
+      }
+      if (timeLeft <= 0 && !_busy) _checkEnd();
+    }
     if (_shakeTime > 0) {
       _shakeTime -= dt;
       final f = (_shakeTime / 0.25).clamp(0.0, 1.0);
@@ -270,7 +295,7 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
     candyMap[a] = cb;
     candyMap[b] = ca;
 
-    movesLeft--;
+    if (mode != GameMode.timed) movesLeft--;
     onStateChanged();
 
     await _resolveLoop(swapA: b, swapB: a);
@@ -315,6 +340,13 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
   }
 
   Future<void> _playClearEffects(ClearEvent ev) async {
+    // 收集模式：累计消除的颜色
+    if (mode == GameMode.collect) {
+      ev.clearedByColor.forEach((color, n) {
+        collected[color] = (collected[color] ?? 0) + n;
+      });
+    }
+
     // 音效 & 震动强度按事件规模
     final bigEvent = ev.colorBombTriggered ||
         ev.wrapsTriggered.isNotEmpty ||
@@ -513,18 +545,31 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
 
   void _checkEnd() {
     if (status != GameStatus.playing) return;
-    if (score >= level.targetScore && movesLeft >= 0) {
-      status = GameStatus.won;
+    switch (mode) {
+      case GameMode.classic:
+        if (score >= level.targetScore) {
+          status = GameStatus.won;
+        } else if (movesLeft <= 0) {
+          status = GameStatus.lost;
+        }
+      case GameMode.collect:
+        if (collectDone) {
+          status = GameStatus.won;
+        } else if (movesLeft <= 0) {
+          status = GameStatus.lost;
+        }
+      case GameMode.timed:
+        // 只在时间耗尽时结束
+        if (timeLeft <= 0) {
+          status =
+              score >= level.targetScore ? GameStatus.won : GameStatus.lost;
+        }
+    }
+    if (status == GameStatus.won) {
       Sfx.win();
       _celebrate();
-    } else if (movesLeft <= 0) {
-      status = score >= level.targetScore ? GameStatus.won : GameStatus.lost;
-      if (status == GameStatus.won) {
-        Sfx.win();
-        _celebrate();
-      } else {
-        Sfx.lose();
-      }
+    } else if (status == GameStatus.lost) {
+      Sfx.lose();
     }
     onStateChanged();
   }
@@ -544,6 +589,14 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
   }
 
   int get stars {
+    if (mode == GameMode.collect) {
+      // 收集模式按剩余步数评星
+      if (status != GameStatus.won) return 0;
+      final ratio = movesLeft / level.moves;
+      if (ratio >= 0.35) return 3;
+      if (ratio >= 0.15) return 2;
+      return 1;
+    }
     if (score >= level.starScore(3)) return 3;
     if (score >= level.starScore(2)) return 2;
     if (score >= level.starScore(1)) return 1;

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// 关卡进度存取。
+import '../game/candy_painter.dart';
+import '../game/candy_spec.dart';
+import '../game/levels.dart';
+
+/// 关卡进度存取（按模式分开存档）。
 class Progress {
   static SharedPreferences? _prefs;
 
@@ -9,18 +13,35 @@ class Progress {
     _prefs = await SharedPreferences.getInstance();
   }
 
-  static int unlockedLevel() => _prefs?.getInt('unlocked') ?? 1;
+  // 经典模式沿用早期 key，保持老存档兼容
+  static String _unlockKey(GameMode m) =>
+      m == GameMode.classic ? 'unlocked' : 'unlocked_${m.name}';
+  static String _starsKey(GameMode m, int id) =>
+      m == GameMode.classic ? 'stars_$id' : 'stars_${m.name}_$id';
 
-  static int starsOf(int levelId) => _prefs?.getInt('stars_$levelId') ?? 0;
+  static int unlockedLevel(GameMode mode) =>
+      _prefs?.getInt(_unlockKey(mode)) ?? 1;
 
-  static Future<void> saveResult(int levelId, int stars) async {
+  static int starsOf(GameMode mode, int levelId) =>
+      _prefs?.getInt(_starsKey(mode, levelId)) ?? 0;
+
+  static Future<void> saveResult(GameMode mode, int levelId, int stars) async {
     if (_prefs == null) return;
-    if (stars > starsOf(levelId)) {
-      await _prefs!.setInt('stars_$levelId', stars);
+    if (stars > starsOf(mode, levelId)) {
+      await _prefs!.setInt(_starsKey(mode, levelId), stars);
     }
-    if (levelId + 1 > unlockedLevel()) {
-      await _prefs!.setInt('unlocked', levelId + 1);
+    if (levelId + 1 > unlockedLevel(mode)) {
+      await _prefs!.setInt(_unlockKey(mode), levelId + 1);
     }
+  }
+
+  /// 限时挑战最佳纪录。返回是否刷新纪录。
+  static int timedBest() => _prefs?.getInt('best_timed') ?? 0;
+
+  static Future<bool> saveTimedBest(int score) async {
+    if (_prefs == null || score <= timedBest()) return false;
+    await _prefs!.setInt('best_timed', score);
+    return true;
   }
 }
 
@@ -179,6 +200,38 @@ class _CandyButtonState extends State<CandyButton> {
       ),
     );
   }
+}
+
+/// 迷你糖果图标（复用游戏内矢量绘制，用于收集目标 chips）。
+class MiniCandy extends StatelessWidget {
+  const MiniCandy({super.key, required this.color, this.size = 22});
+
+  final CandyColor color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size.square(size),
+      painter: _MiniCandyPainter(color),
+    );
+  }
+}
+
+class _MiniCandyPainter extends CustomPainter {
+  _MiniCandyPainter(this.color);
+
+  final CandyColor color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.translate(size.width / 2, size.height / 2);
+    CandyPainter.paint(canvas, size.width, color, SpecialType.none);
+  }
+
+  @override
+  bool shouldRepaint(_MiniCandyPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 /// 星星行。

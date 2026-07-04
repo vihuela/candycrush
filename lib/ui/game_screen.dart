@@ -19,6 +19,9 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   late MatchGame game;
   bool _resultShown = false;
+  bool _isNewBest = false;
+
+  GameMode get mode => widget.level.mode;
 
   @override
   void initState() {
@@ -28,6 +31,7 @@ class _GameScreenState extends State<GameScreen> {
 
   void _newGame() {
     _resultShown = false;
+    _isNewBest = false;
     game = MatchGame(
       level: widget.level,
       onStateChanged: _onGameState,
@@ -39,9 +43,7 @@ class _GameScreenState extends State<GameScreen> {
     setState(() {});
     if (game.status != GameStatus.playing && !_resultShown) {
       _resultShown = true;
-      if (game.status == GameStatus.won) {
-        Progress.saveResult(widget.level.id, game.stars);
-      }
+      _saveOutcome();
       // 稍等庆祝动画再弹结算
       Future.delayed(const Duration(milliseconds: 900), () {
         if (mounted) _showResult();
@@ -49,18 +51,31 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  Future<void> _saveOutcome() async {
+    if (mode == GameMode.timed) {
+      // 限时模式无论胜负都尝试刷新纪录
+      _isNewBest = await Progress.saveTimedBest(game.score);
+    } else if (game.status == GameStatus.won) {
+      await Progress.saveResult(mode, widget.level.id, game.stars);
+    }
+  }
+
   Future<void> _showResult() async {
     final won = game.status == GameStatus.won;
-    final hasNext = widget.level.id < levels.length;
+    final hasNext =
+        mode != GameMode.timed && widget.level.id < levelsOf(mode).length;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black54,
       builder: (ctx) => _ResultDialog(
+        mode: mode,
         won: won,
         score: game.score,
         stars: game.stars,
         target: widget.level.targetScore,
+        best: mode == GameMode.timed ? Progress.timedBest() : null,
+        isNewBest: _isNewBest,
         onNext: won && hasNext
             ? () {
                 Navigator.of(ctx).pop();
@@ -68,7 +83,7 @@ class _GameScreenState extends State<GameScreen> {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
                     builder: (_) =>
-                        GameScreen(level: levels[widget.level.id]),
+                        GameScreen(level: levelsOf(mode)[widget.level.id]),
                   ),
                 );
               }
@@ -87,8 +102,9 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final progress =
-        (game.score / widget.level.targetScore).clamp(0.0, 1.0);
+    final progress = widget.level.targetScore > 0
+        ? (game.score / widget.level.targetScore).clamp(0.0, 1.0)
+        : 0.0;
     return Scaffold(
       body: GameBackground(
         child: SafeArea(
@@ -119,31 +135,13 @@ class _GameScreenState extends State<GameScreen> {
                 onTap: () => Navigator.of(context).maybePop(),
               ),
               const SizedBox(width: 10),
-              _pill(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.swipe_rounded,
-                        color: Color(0xFF7CE4FF), size: 19),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${game.movesLeft}',
-                      style: TextStyle(
-                        fontFamily: 'Fredoka',
-                        fontSize: 21,
-                        fontWeight: FontWeight.w700,
-                        color: game.movesLeft <= 5
-                            ? const Color(0xFFFF6E6E)
-                            : Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              if (mode == GameMode.timed) _timerPill() else _movesPill(),
               const Spacer(),
               _pill(
                 child: Text(
-                  '第 ${widget.level.id} 关',
+                  mode == GameMode.timed
+                      ? '限时挑战'
+                      : '第 ${widget.level.id} 关',
                   style: const TextStyle(
                     fontFamily: 'Fredoka',
                     fontSize: 15,
@@ -175,58 +173,160 @@ class _GameScreenState extends State<GameScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          // 目标进度条：加高、圆头、光泽
-          SizedBox(
-            height: 18,
-            child: Stack(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0x66120A28),
-                    borderRadius: BorderRadius.circular(9),
-                    border: Border.all(color: Colors.white24, width: 1.2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(2.5),
-                  child: AnimatedFractionallySizedBox(
-                    duration: const Duration(milliseconds: 350),
-                    curve: Curves.easeOutCubic,
-                    alignment: Alignment.centerLeft,
-                    widthFactor: progress <= 0 ? 0.001 : progress,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Color(0xFF8CF2A0),
-                            Color(0xFF35D461),
-                            Color(0xFF1FA84A),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(7),
-                        boxShadow: const [
-                          BoxShadow(
-                              color: Color(0x8035D461), blurRadius: 8),
-                        ],
+          if (mode == GameMode.collect)
+            _buildCollectGoals()
+          else
+            _buildProgressBar(progress),
+        ],
+      ),
+    );
+  }
+
+  Widget _movesPill() {
+    return _pill(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.swipe_rounded, color: Color(0xFF7CE4FF), size: 19),
+          const SizedBox(width: 6),
+          Text(
+            '${game.movesLeft}',
+            style: TextStyle(
+              fontFamily: 'Fredoka',
+              fontSize: 21,
+              fontWeight: FontWeight.w700,
+              color: game.movesLeft <= 5
+                  ? const Color(0xFFFF6E6E)
+                  : Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _timerPill() {
+    final secs = game.timeLeft.ceil();
+    final danger = secs <= 10;
+    return _pill(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.timer_rounded,
+              color: danger ? const Color(0xFFFF6E6E) : const Color(0xFF7CE4FF),
+              size: 19),
+          const SizedBox(width: 6),
+          Text(
+            '$secs s',
+            style: TextStyle(
+              fontFamily: 'Fredoka',
+              fontSize: 21,
+              fontWeight: FontWeight.w700,
+              color: danger ? const Color(0xFFFF6E6E) : Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 收集模式目标 chips：小糖果图标 + 已收集/目标。
+  Widget _buildCollectGoals() {
+    final goals = widget.level.collectGoals ?? {};
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: goals.entries.map((e) {
+        final have = (game.collected[e.key] ?? 0).clamp(0, e.value);
+        final done = have >= e.value;
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x40241543), Color(0x66120A28)],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: done
+                  ? const Color(0xFF6FE08A)
+                  : Colors.white.withValues(alpha: 0.22),
+              width: done ? 1.8 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MiniCandy(color: e.key, size: 22),
+              const SizedBox(width: 7),
+              done
+                  ? const Icon(Icons.check_circle_rounded,
+                      color: Color(0xFF6FE08A), size: 20)
+                  : Text(
+                      '$have/${e.value}',
+                      style: const TextStyle(
+                        fontFamily: 'Fredoka',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
                       ),
                     ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildProgressBar(double progress) {
+    return SizedBox(
+      height: 18,
+      child: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0x66120A28),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: Colors.white24, width: 1.2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(2.5),
+            child: AnimatedFractionallySizedBox(
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.centerLeft,
+              widthFactor: progress <= 0 ? 0.001 : progress,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFF8CF2A0),
+                      Color(0xFF35D461),
+                      Color(0xFF1FA84A),
+                    ],
                   ),
+                  borderRadius: BorderRadius.circular(7),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x8035D461), blurRadius: 8),
+                  ],
                 ),
-                Center(
-                  child: Text(
-                    '目标 ${widget.level.targetScore}',
-                    style: const TextStyle(
-                      fontFamily: 'Fredoka',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                      shadows: [Shadow(color: Colors.black87, blurRadius: 3)],
-                    ),
-                  ),
-                ),
-              ],
+              ),
+            ),
+          ),
+          Center(
+            child: Text(
+              '目标 ${widget.level.targetScore}',
+              style: const TextStyle(
+                fontFamily: 'Fredoka',
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+                shadows: [Shadow(color: Colors.black87, blurRadius: 3)],
+              ),
             ),
           ),
         ],
@@ -433,15 +533,19 @@ class _GameScreenState extends State<GameScreen> {
 
 class _ResultDialog extends StatelessWidget {
   const _ResultDialog({
+    required this.mode,
     required this.won,
     required this.score,
     required this.stars,
     required this.target,
     required this.onRetry,
     required this.onExit,
+    this.best,
+    this.isNewBest = false,
     this.onNext,
   });
 
+  final GameMode mode;
   final bool won;
   final int score;
   final int stars;
@@ -449,12 +553,25 @@ class _ResultDialog extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onExit;
 
+  /// 限时模式最佳纪录。
+  final int? best;
+  final bool isNewBest;
+
   /// 有下一关时的回调；末关或失败为 null。
   final VoidCallback? onNext;
 
+  String get _title {
+    if (mode == GameMode.timed) {
+      return isNewBest ? '🏆 新纪录！' : '⏱️ 时间到！';
+    }
+    if (won) {
+      return onNext == null ? '👑 全部通关！' : '🎉 过关啦！';
+    }
+    return '😢 差一点点';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isLastLevelWin = won && onNext == null;
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
@@ -477,9 +594,7 @@ class _ResultDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              won
-                  ? (isLastLevelWin ? '👑 全部通关！' : '🎉 过关啦！')
-                  : '😢 差一点点',
+              _title,
               style: const TextStyle(
                 fontSize: 30,
                 fontWeight: FontWeight.w700,
@@ -487,8 +602,10 @@ class _ResultDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            if (won) StarsRow(stars: stars),
-            if (won) const SizedBox(height: 16),
+            if (won && mode != GameMode.timed) ...[
+              StarsRow(stars: stars),
+              const SizedBox(height: 16),
+            ],
             Text(
               '得分  $score',
               style: const TextStyle(
@@ -498,13 +615,39 @@ class _ResultDialog extends StatelessWidget {
                 color: Color(0xFFFFD31A),
               ),
             ),
-            Text(
-              '目标  $target',
-              style: const TextStyle(fontSize: 15, color: Colors.white60),
-            ),
+            if (mode == GameMode.timed && best != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.emoji_events_rounded,
+                        color: Color(0xFFFFD31A), size: 18),
+                    const SizedBox(width: 5),
+                    Text(
+                      '最佳纪录  $best',
+                      style: const TextStyle(
+                          fontSize: 15, color: Colors.white70),
+                    ),
+                  ],
+                ),
+              )
+            else if (mode == GameMode.classic)
+              Text(
+                '目标  $target',
+                style:
+                    const TextStyle(fontSize: 15, color: Colors.white60),
+              ),
             const SizedBox(height: 24),
-            // 主操作：过关 -> 下一关；失败 -> 重试；末关通关 -> 返回选关
-            if (won && onNext != null)
+            // 主操作
+            if (mode == GameMode.timed)
+              CandyButton(
+                label: '再来一局',
+                color: const Color(0xFFFF7043),
+                width: 200,
+                onTap: onRetry,
+              )
+            else if (won && onNext != null)
               CandyButton(
                 label: '下一关  ▶',
                 color: const Color(0xFF35D461),
@@ -530,7 +673,7 @@ class _ResultDialog extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (won) ...[
+                if (won && mode != GameMode.timed) ...[
                   _SecondaryButton(
                     icon: Icons.refresh_rounded,
                     label: '重玩',

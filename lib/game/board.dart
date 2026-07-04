@@ -36,6 +36,7 @@ class ClearEvent {
     required this.spawns,
     required this.score,
     required this.cascade,
+    this.clearedByColor = const {},
     this.colorBombTriggered = false,
     this.stripesTriggered = const [],
     this.wrapsTriggered = const [],
@@ -51,6 +52,9 @@ class ClearEvent {
 
   /// 连锁层级，1 表示玩家直接触发。
   final int cascade;
+
+  /// 各颜色被消除的数量（收集模式用）。
+  final Map<CandyColor, int> clearedByColor;
 
   final bool colorBombTriggered;
   final List<Pos> stripesTriggered;
@@ -264,6 +268,7 @@ class Board {
     score *= cascade;
 
     // 5. 移除（生成点不移除，替换为特殊糖）
+    final byColor = _countColors(toClear, spawns.keys.toSet());
     for (final p in toClear) {
       if (spawns.containsKey(p)) {
         grid[p.row][p.col] = Cell(at(p)!.color, special: spawns[p]!);
@@ -277,6 +282,7 @@ class Board {
       spawns: spawns,
       score: score,
       cascade: cascade,
+      clearedByColor: byColor,
       stripesTriggered: stripes,
       wrapsTriggered: wraps,
     );
@@ -370,6 +376,7 @@ class Board {
     }
     score *= cascade;
 
+    final byColor = _countColors(toClear);
     for (final p in toClear) {
       grid[p.row][p.col] = null;
     }
@@ -379,10 +386,25 @@ class Board {
       spawns: const {},
       score: score,
       cascade: cascade,
+      clearedByColor: byColor,
       colorBombTriggered: colorBomb,
       stripesTriggered: stripes,
       wrapsTriggered: wraps,
     );
+  }
+
+  /// 统计将被移除格子的颜色分布（不含变身成特殊糖的格子）。
+  Map<CandyColor, int> _countColors(Iterable<Pos> cells,
+      [Set<Pos> exclude = const {}]) {
+    final counts = <CandyColor, int>{};
+    for (final p in cells) {
+      if (exclude.contains(p)) continue;
+      final cell = at(p);
+      if (cell != null) {
+        counts[cell.color] = (counts[cell.color] ?? 0) + 1;
+      }
+    }
+    return counts;
   }
 
   void _clearRow(int r, Set<Pos> out) {
@@ -595,6 +617,7 @@ class Board {
     for (final p in toClear) {
       if (at(p) != null) score += 60;
     }
+    final byColor = _countColors(toClear);
     for (final p in toClear) {
       grid[p.row][p.col] = null;
     }
@@ -603,6 +626,7 @@ class Board {
       spawns: const {},
       score: score,
       cascade: 1,
+      clearedByColor: byColor,
       stripesTriggered: stripes,
       wrapsTriggered: wraps,
     );
