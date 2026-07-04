@@ -11,20 +11,21 @@ import 'candy_spec.dart';
 
 final _rng = Random();
 
-/// 糖果爆裂粒子：碎片 + 星光。
+/// 糖果爆裂粒子：碎片 + 星光。[count] 可在大规模消除时限流。
 ParticleSystemComponent burstParticles(
   Vector2 at,
   CandyColor color,
   double cellSize, {
   double intensity = 1,
+  int? count,
 }) {
   final base = CandyPalette.base[color]!;
-  final count = (10 * intensity).round();
+  final n = count ?? (10 * intensity).round();
   return ParticleSystemComponent(
     position: at,
     priority: 60,
     particle: Particle.generate(
-      count: count,
+      count: n,
       lifespan: 0.55,
       generator: (i) {
         final angle = _rng.nextDouble() * 2 * pi;

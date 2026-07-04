@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui' show Gradient;
+import 'dart:ui' show Gradient, PlatformDispatcher;
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
@@ -10,6 +10,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 
 import 'board.dart';
 import 'candy_component.dart';
+import 'candy_sprites.dart';
 import 'candy_spec.dart';
 import 'effects.dart';
 import 'levels.dart';
@@ -71,6 +72,10 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
 
     board = Board(rows, cols, colorCount: level.colorCount);
     _layout();
+    // 按设备像素比预渲染糖果纹理，连击时不再矢量重绘
+    CandySprites.dpr =
+        PlatformDispatcher.instance.views.first.devicePixelRatio;
+    CandySprites.warmUp(cellSize);
     _world.add(_BoardBackground(
       origin: boardOrigin,
       cellSize: cellSize,
@@ -382,7 +387,9 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
       ));
     }
 
-    // 爆裂粒子 + 消除动画
+    // 爆裂粒子 + 消除动画（大规模消除时按比例限流粒子数）
+    final perCandy =
+        (72 / max(6, ev.cleared.length)).clamp(4.0, 12.0).round();
     final futures = <Future<void>>[];
     for (final p in ev.cleared) {
       final comp = candyMap.remove(p);
@@ -392,6 +399,7 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
         comp.cell.color,
         cellSize,
         intensity: bigEvent ? 1.4 : 1,
+        count: perCandy,
       ));
       futures.add(comp.playClear().then((_) => comp.removeFromParent()));
     }

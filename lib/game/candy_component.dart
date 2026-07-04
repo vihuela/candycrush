@@ -1,12 +1,14 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
 import 'package:flame/effects.dart';
 import 'package:flutter/animation.dart' show Curve, Curves;
-import 'package:flutter/painting.dart' show Canvas, Paint, Color, Offset;
+import 'package:flutter/painting.dart'
+    show Canvas, Paint, Color, Offset, Rect, FilterQuality;
 
 import 'board.dart';
-import 'candy_painter.dart';
+import 'candy_sprites.dart';
 import 'candy_spec.dart';
 import 'match_game.dart';
 
@@ -35,6 +37,9 @@ class CandyComponent extends PositionComponent
     _idlePhase += dt;
   }
 
+  static final Paint _spritePaint = Paint()
+    ..filterQuality = FilterQuality.medium;
+
   @override
   void render(Canvas canvas) {
     canvas.save();
@@ -58,7 +63,15 @@ class CandyComponent extends PositionComponent
       canvas.scale(s);
     }
 
-    CandyPainter.paint(canvas, size.x, cell.color, cell.special);
+    // 从纹理缓存贴图（预渲染，避免每帧矢量重绘）
+    final ui.Image img = CandySprites.of(cell.color, cell.special, size.x);
+    final side = size.x * CandySprites.pad;
+    canvas.drawImageRect(
+      img,
+      Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+      Rect.fromCenter(center: Offset.zero, width: side, height: side),
+      _spritePaint,
+    );
     canvas.restore();
   }
 
