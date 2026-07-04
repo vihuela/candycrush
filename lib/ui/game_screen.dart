@@ -51,6 +51,7 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _showResult() async {
     final won = game.status == GameStatus.won;
+    final hasNext = widget.level.id < levels.length;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -60,6 +61,18 @@ class _GameScreenState extends State<GameScreen> {
         score: game.score,
         stars: game.stars,
         target: widget.level.targetScore,
+        onNext: won && hasNext
+            ? () {
+                Navigator.of(ctx).pop();
+                // 用下一关替换当前对局页
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        GameScreen(level: levels[widget.level.id]),
+                  ),
+                );
+              }
+            : null,
         onRetry: () {
           Navigator.of(ctx).pop();
           setState(_newGame);
@@ -426,6 +439,7 @@ class _ResultDialog extends StatelessWidget {
     required this.target,
     required this.onRetry,
     required this.onExit,
+    this.onNext,
   });
 
   final bool won;
@@ -435,8 +449,12 @@ class _ResultDialog extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onExit;
 
+  /// 有下一关时的回调；末关或失败为 null。
+  final VoidCallback? onNext;
+
   @override
   Widget build(BuildContext context) {
+    final isLastLevelWin = won && onNext == null;
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
@@ -459,10 +477,12 @@ class _ResultDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              won ? '🎉 过关啦！' : '😢 差一点点',
+              won
+                  ? (isLastLevelWin ? '👑 全部通关！' : '🎉 过关啦！')
+                  : '😢 差一点点',
               style: const TextStyle(
                 fontSize: 30,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 color: Colors.white,
               ),
             ),
@@ -472,8 +492,9 @@ class _ResultDialog extends StatelessWidget {
             Text(
               '得分  $score',
               style: const TextStyle(
+                fontFamily: 'Fredoka',
                 fontSize: 24,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: Color(0xFFFFD31A),
               ),
             ),
@@ -482,24 +503,91 @@ class _ResultDialog extends StatelessWidget {
               style: const TextStyle(fontSize: 15, color: Colors.white60),
             ),
             const SizedBox(height: 24),
+            // 主操作：过关 -> 下一关；失败 -> 重试；末关通关 -> 返回选关
+            if (won && onNext != null)
+              CandyButton(
+                label: '下一关  ▶',
+                color: const Color(0xFF35D461),
+                width: 200,
+                onTap: onNext!,
+              )
+            else if (won)
+              CandyButton(
+                label: '返回选关',
+                color: const Color(0xFF35D461),
+                width: 200,
+                onTap: onExit,
+              )
+            else
+              CandyButton(
+                label: '重试',
+                color: const Color(0xFF35D461),
+                width: 200,
+                onTap: onRetry,
+              ),
+            const SizedBox(height: 14),
+            // 次要操作
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CandyButton(
-                  label: won ? '再玩一次' : '重试',
-                  color: const Color(0xFF35D461),
-                  onTap: onRetry,
-                ),
-                const SizedBox(width: 14),
-                CandyButton(
+                if (won) ...[
+                  _SecondaryButton(
+                    icon: Icons.refresh_rounded,
+                    label: '重玩',
+                    onTap: onRetry,
+                  ),
+                  const SizedBox(width: 26),
+                ],
+                _SecondaryButton(
+                  icon: Icons.home_rounded,
                   label: '返回',
-                  color: const Color(0xFF2FA8FF),
                   onTap: onExit,
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 结算弹窗的次要操作：圆形图标按钮 + 小字标签。
+class _SecondaryButton extends StatelessWidget {
+  const _SecondaryButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.14),
+              border:
+                  Border.all(color: Colors.white.withValues(alpha: 0.4)),
+            ),
+            child: Icon(icon, color: Colors.white, size: 24),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Colors.white70),
+          ),
+        ],
       ),
     );
   }
