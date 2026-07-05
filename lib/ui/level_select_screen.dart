@@ -1,6 +1,9 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../game/candy_spec.dart';
 import '../game/levels.dart';
 import '../i18n/strings.dart';
 import 'common.dart';
@@ -19,6 +22,20 @@ class LevelSelectScreen extends StatefulWidget {
 
 class _LevelSelectScreenState extends State<LevelSelectScreen> {
   GameMode _mode = GameMode.classic;
+  ScrollController? _scroll;
+
+  @override
+  void dispose() {
+    _scroll?.dispose();
+    super.dispose();
+  }
+
+  void _switchMode(GameMode m) {
+    if (m == _mode) return;
+    _scroll?.dispose();
+    _scroll = null;
+    setState(() => _mode = m);
+  }
 
   Future<void> _openLevel(LevelConfig level) async {
     await Navigator.of(context).push(
@@ -282,7 +299,7 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
             return Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => setState(() => _mode = m),
+                onTap: () => _switchMode(m),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   height: 38,
@@ -346,27 +363,145 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
   Widget _buildLevelGrid() {
     final list = levelsOf(_mode);
     final unlocked = Progress.unlockedLevel(_mode);
-    return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 18,
-        crossAxisSpacing: 18,
-        childAspectRatio: 0.9,
-      ),
-      itemCount: list.length,
-      itemBuilder: (context, i) {
-        final level = list[i];
-        final isUnlocked = level.id <= unlocked;
-        final stars = Progress.starsOf(_mode, level.id);
-        return _LevelTile(
-          level: level,
-          unlocked: isUnlocked,
-          stars: stars,
-          onTap: isUnlocked ? () => _openLevel(level) : null,
-        );
-      },
+    // 蜿蜒路径地图：S 形节点排布
+    const spacing = 148.0;
+    const topPad = 60.0;
+    final contentHeight = topPad + spacing * list.length + 90;
+    // 关卡节点横向位置模式（0~1 宽度系数）
+    const xPattern = [0.26, 0.54, 0.78, 0.54];
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final w = constraints.maxWidth;
+      // 首次进入自动定位到当前关卡附近
+      _scroll ??= ScrollController(
+        initialScrollOffset: (topPad +
+                (unlocked - 1) * spacing -
+                constraints.maxHeight * 0.45)
+            .clamp(0.0, max(0.0, contentHeight - constraints.maxHeight)),
+      );
+      final points = [
+        for (var i = 0; i < list.length; i++)
+          Offset(w * xPattern[i % xPattern.length], topPad + i * spacing),
+      ];
+      final endPoint = Offset(
+        w * xPattern[list.length % xPattern.length],
+        topPad + list.length * spacing,
+      );
+      return SingleChildScrollView(
+        controller: _scroll,
+        child: SizedBox(
+          height: contentHeight,
+          width: double.infinity,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // 背景装饰糖果
+              ..._decorCandies(w, contentHeight),
+              // 蜿蜒虚线路径
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _PathPainter([...points, endPoint]),
+                ),
+              ),
+              // 关卡节点
+              for (var i = 0; i < list.length; i++)
+                _positionNode(
+                  points[i],
+                  _LevelNode(
+                    id: list[i].id,
+                    color: _nodeColor(i),
+                    stars: Progress.starsOf(_mode, list[i].id),
+                    state: list[i].id < unlocked
+                        ? _NodeState.done
+                        : list[i].id == unlocked
+                            ? _NodeState.current
+                            : _NodeState.locked,
+                    onTap: list[i].id <= unlocked
+                        ? () => _openLevel(list[i])
+                        : null,
+                  ),
+                ),
+              // 路径终点：敬请期待
+              Positioned(
+                left: endPoint.dx - 90,
+                top: endPoint.dy - 16,
+                child: SizedBox(
+                  width: 180,
+                  child: Column(
+                    children: [
+                      const Text('🎁', style: TextStyle(fontSize: 30)),
+                      const SizedBox(height: 4),
+                      Text(
+                        Lang.t.comingSoon,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white38,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _positionNode(Offset center, _LevelNode node) {
+    // 节点区域固定 128x128，居中于路径点
+    return Positioned(
+      left: center.dx - 64,
+      top: center.dy - 56,
+      child: SizedBox(width: 128, height: 128, child: Center(child: node)),
     );
+  }
+
+  Color _nodeColor(int index) {
+    const cycle = [
+      CandyColor.red,
+      CandyColor.orange,
+      CandyColor.green,
+      CandyColor.blue,
+      CandyColor.purple,
+    ];
+    return CandyPalette.base[cycle[index % cycle.length]]!;
+  }
+
+  /// 背景低透明度装饰糖果。
+  List<Widget> _decorCandies(double w, double h) {
+    final rng = Random(11);
+    final colors = CandyColor.values;
+    final widgets = <Widget>[];
+    final count = (h / 170).round();
+    for (var i = 0; i < count; i++) {
+      final leftSide = i.isEven;
+      final x = leftSide
+          ? w * (0.02 + rng.nextDouble() * 0.08)
+          : w * (0.84 + rng.nextDouble() * 0.08);
+      final y = h * (i + 0.5) / count + (rng.nextDouble() - 0.5) * 40;
+      final size = 26.0 + rng.nextDouble() * 26;
+      widgets.add(Positioned(
+        left: x,
+        top: y,
+        child: RepaintBoundary(
+          child: Opacity(
+            opacity: 0.16,
+            child: Transform.rotate(
+              angle: (rng.nextDouble() - 0.5) * 1.2,
+              child: MiniCandy(
+                color: colors[rng.nextInt(colors.length)],
+                size: size,
+              ),
+            ),
+          ),
+        ),
+      ));
+    }
+    return widgets;
   }
 
   Widget _buildTimedBody() {
@@ -451,117 +586,220 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
   }
 }
 
-class _LevelTile extends StatelessWidget {
-  const _LevelTile({
-    required this.level,
-    required this.unlocked,
+enum _NodeState { locked, current, done }
+
+/// 关卡节点：糖果球按钮。
+class _LevelNode extends StatefulWidget {
+  const _LevelNode({
+    required this.id,
+    required this.color,
     required this.stars,
+    required this.state,
     this.onTap,
   });
 
-  final LevelConfig level;
-  final bool unlocked;
+  final int id;
+  final Color color;
   final int stars;
+  final _NodeState state;
   final VoidCallback? onTap;
 
   @override
+  State<_LevelNode> createState() => _LevelNodeState();
+}
+
+class _LevelNodeState extends State<_LevelNode>
+    with SingleTickerProviderStateMixin {
+  AnimationController? _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.state == _NodeState.current) {
+      _pulse = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 1400),
+      )..repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: unlocked
-                ? (level.mode == GameMode.collect
-                    ? [
-                        const Color(0xFF6FD7A8),
-                        const Color(0xFF3BB781),
-                        const Color(0xFF1E8A64),
-                      ]
-                    : [
-                        const Color(0xFFFF8AC5),
-                        const Color(0xFFE255A8),
-                        const Color(0xFF9C3FD9),
-                      ])
-                : [Colors.white12, Colors.white10],
-            stops: unlocked ? const [0.0, 0.5, 1.0] : null,
-          ),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-            color: unlocked
-                ? Colors.white.withValues(alpha: 0.5)
-                : Colors.white24,
-            width: 1.5,
-          ),
-          boxShadow: unlocked
-              ? [
-                  BoxShadow(
-                    color: level.mode == GameMode.collect
-                        ? const Color(0xFF14684A)
-                        : const Color(0xFF6A2496),
-                    offset: const Offset(0, 5),
-                  ),
-                  const BoxShadow(
-                    color: Color(0x59000000),
-                    offset: Offset(0, 10),
-                    blurRadius: 12,
-                  ),
-                ]
-              : null,
+    final locked = widget.state == _NodeState.locked;
+    final current = widget.state == _NodeState.current;
+    final d = current ? 92.0 : (locked ? 66.0 : 80.0);
+    final hsl = HSLColor.fromColor(widget.color);
+    final top = hsl.withLightness((hsl.lightness + 0.16).clamp(0.0, 1.0)).toColor();
+    final bottom = hsl.withLightness((hsl.lightness - 0.14).clamp(0.0, 1.0)).toColor();
+    final rim = hsl.withLightness((hsl.lightness - 0.30).clamp(0.0, 1.0)).toColor();
+
+    final orb = Container(
+      width: d,
+      height: d,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: locked
+            ? const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x4DFFFFFF), Color(0x21FFFFFF)],
+              )
+            : LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [top, widget.color, bottom],
+                stops: const [0.0, 0.55, 1.0],
+              ),
+        border: Border.all(
+          color: locked
+              ? Colors.white24
+              : Colors.white.withValues(alpha: 0.75),
+          width: locked ? 1.5 : 2.5,
         ),
-        child: Stack(
-          children: [
-            // 顶部光泽
-            if (unlocked)
-              Positioned(
-                top: 5,
-                left: 10,
-                right: 10,
-                child: Container(
-                  height: 18,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0x4DFFFFFF), Color(0x00FFFFFF)],
-                    ),
-                    borderRadius: BorderRadius.circular(10),
+        boxShadow: locked
+            ? null
+            : [
+                BoxShadow(color: rim, offset: const Offset(0, 5)),
+                const BoxShadow(
+                  color: Color(0x66000000),
+                  offset: Offset(0, 9),
+                  blurRadius: 10,
+                ),
+              ],
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (!locked)
+            Positioned(
+              top: d * 0.08,
+              child: Container(
+                width: d * 0.6,
+                height: d * 0.26,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(d * 0.15),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x7DFFFFFF), Color(0x00FFFFFF)],
                   ),
                 ),
               ),
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (unlocked) ...[
-                    Text(
-                      '${level.id}',
-                      style: const TextStyle(
-                        fontFamily: 'Fredoka',
-                        fontSize: 34,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        shadows: [
-                          Shadow(
-                              color: Color(0x66000000),
-                              offset: Offset(0, 2),
-                              blurRadius: 3),
-                        ],
+            ),
+          locked
+              ? const Icon(Icons.lock_rounded, color: Colors.white54, size: 26)
+              : Text(
+                  '${widget.id}',
+                  style: TextStyle(
+                    fontFamily: 'Fredoka',
+                    fontSize: current ? 36 : 32,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    shadows: const [
+                      Shadow(
+                          color: Color(0x66000000),
+                          offset: Offset(0, 2)),
+                    ],
+                  ),
+                ),
+        ],
+      ),
+    );
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: SizedBox(
+        width: 120,
+        height: 120,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            // 当前关卡呼吸光环
+            if (current && _pulse != null)
+              AnimatedBuilder(
+                animation: _pulse!,
+                builder: (context, _) {
+                  final t = _pulse!.value;
+                  return Container(
+                    width: d + 14 + 22 * t,
+                    height: d + 14 + 22 * t,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.55 * (1 - t)),
+                        width: 3,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    StarsRow(stars: stars, size: 17),
-                  ] else
-                    const Icon(Icons.lock_rounded,
-                        color: Colors.white38, size: 34),
-                ],
+                  );
+                },
               ),
-            ),
+            orb,
+            // 已通关星级，压在节点下缘
+            if (widget.state == _NodeState.done && widget.stars > 0)
+              Positioned(
+                bottom: 4,
+                child: StarsRow(
+                    stars: widget.stars, size: 16, glow: false),
+              ),
           ],
         ),
       ),
     );
   }
+}
+
+/// 关卡间蜿蜒虚线路径。
+class _PathPainter extends CustomPainter {
+  _PathPainter(this.points);
+
+  final List<Offset> points;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+    // 经典中点平滑：以节点为控制点、相邻中点为端点，保证不产生回环
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (var i = 1; i < points.length - 1; i++) {
+      final mid = Offset(
+        (points[i].dx + points[i + 1].dx) / 2,
+        (points[i].dy + points[i + 1].dy) / 2,
+      );
+      path.quadraticBezierTo(points[i].dx, points[i].dy, mid.dx, mid.dy);
+    }
+    path.lineTo(points.last.dx, points.last.dy);
+
+    // 宽底路径
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 30
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = const Color(0x12FFFFFF),
+    );
+    // 沿路径的圆点虚线
+    final dotPaint = Paint()..color = const Color(0x59FFFFFF);
+    for (final metric in path.computeMetrics()) {
+      var dist = 0.0;
+      while (dist < metric.length) {
+        final pos = metric.getTangentForOffset(dist)?.position;
+        if (pos != null) {
+          canvas.drawCircle(pos, 3.4, dotPaint);
+        }
+        dist += 26;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PathPainter oldDelegate) =>
+      oldDelegate.points != points;
 }

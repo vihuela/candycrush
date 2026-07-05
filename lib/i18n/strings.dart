@@ -109,6 +109,7 @@ class L {
     required this.language,
     required this.terms,
     required this.privacy,
+    required this.comingSoon,
   });
 
   final String subtitle;
@@ -144,6 +145,7 @@ class L {
   final String language;
   final String terms;
   final String privacy;
+  final String comingSoon;
 }
 
 final Map<AppLang, L> _tables = {
@@ -181,6 +183,7 @@ final Map<AppLang, L> _tables = {
     language: '语言',
     terms: '服务协议',
     privacy: '隐私政策',
+    comingSoon: '更多关卡即将推出',
   ),
   AppLang.zhHant: L(
     subtitle: '甜蜜消消樂',
@@ -216,6 +219,7 @@ final Map<AppLang, L> _tables = {
     language: '語言',
     terms: '服務條款',
     privacy: '隱私政策',
+    comingSoon: '更多關卡即將推出',
   ),
   AppLang.en: L(
     subtitle: 'Sweet Match-3 Fun',
@@ -252,6 +256,7 @@ final Map<AppLang, L> _tables = {
     language: 'Language',
     terms: 'Terms of Service',
     privacy: 'Privacy Policy',
+    comingSoon: 'More levels coming soon',
   ),
   AppLang.ja: L(
     subtitle: 'スイートマッチ3',
@@ -287,6 +292,7 @@ final Map<AppLang, L> _tables = {
     language: '言語',
     terms: '利用規約',
     privacy: 'プライバシーポリシー',
+    comingSoon: '新レベルは近日公開',
   ),
   AppLang.ko: L(
     subtitle: '스위트 매치3',
@@ -322,5 +328,6 @@ final Map<AppLang, L> _tables = {
     language: '언어',
     terms: '서비스 약관',
     privacy: '개인정보 처리방침',
+    comingSoon: '새 레벨이 곧 출시됩니다',
   ),
 };

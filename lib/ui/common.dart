@@ -236,10 +236,18 @@ class _MiniCandyPainter extends CustomPainter {
 
 /// 星星行。
 class StarsRow extends StatelessWidget {
-  const StarsRow({super.key, required this.stars, this.size = 44});
+  const StarsRow({
+    super.key,
+    required this.stars,
+    this.size = 44,
+    this.glow = true,
+  });
 
   final int stars;
   final double size;
+
+  /// 发光阴影。滚动容器内建议关闭（Impeller 模糊层位移缺陷规避）。
+  final bool glow;
 
   @override
   Widget build(BuildContext context) {
@@ -255,7 +263,7 @@ class StarsRow extends StatelessWidget {
               Icons.star_rounded,
               size: i == 1 ? size * 1.25 : size,
               color: lit ? const Color(0xFFFFD31A) : Colors.white24,
-              shadows: lit
+              shadows: lit && glow
                   ? const [
                       Shadow(color: Color(0xAAFF9F1A), blurRadius: 12),
                     ]
