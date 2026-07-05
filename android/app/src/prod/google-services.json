@@ -1,0 +1,88 @@
+{
+  "project_info": {
+    "project_number": "189187129843",
+    "project_id": "sleepsounds-f05ac",
+    "storage_bucket": "sleepsounds-f05ac.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:189187129843:android:b7123f93b7bcd4bf649286",
+        "android_client_info": {
+          "package_name": "com.brickverse.bricksbreaker.balls"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwe4w2qJWSHcO2M_w3ssykp1uSBu_BdPY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:189187129843:android:8432cdb5d4413190649286",
+        "android_client_info": {
+          "package_name": "com.pdfreader.viewer.scanner.editor.sign.annotate.documentfile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwe4w2qJWSHcO2M_w3ssykp1uSBu_BdPY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      },
+      "admob_app_id": "ca-app-pub-3164104673353737~2416643563"
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:189187129843:android:f6b50a4ac99cdadf649286",
+        "android_client_info": {
+          "package_name": "com.sleepsounds.meditation.relaxation.play.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwe4w2qJWSHcO2M_w3ssykp1uSBu_BdPY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      },
+      "admob_app_id": "ca-app-pub-3164104673353737~3705640430"
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:189187129843:android:7647cb03de0be2df649286",
+        "android_client_info": {
+          "package_name": "com.sweetcandy.match3.puzzle"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwe4w2qJWSHcO2M_w3ssykp1uSBu_BdPY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

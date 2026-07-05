@@ -40,6 +40,9 @@ dependencies:
   flame_audio: ^2.12.1
   shared_preferences: ^2.5.5
   url_launcher: ^6.3.2
+  firebase_core: ^4.11.0
+  firebase_analytics: ^12.4.3
+  firebase_crashlytics: ^5.2.4
 
 dev_dependencies:
   flutter_test:

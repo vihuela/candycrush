@@ -1,3 +1,8 @@
+import 'dart:ui';
+
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -9,9 +14,13 @@ import 'ui/level_select_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  await Firebase.initializeApp();
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   await Progress.init();
   await Lang.init();
@@ -30,10 +39,11 @@ class SweetCrushApp extends StatelessWidget {
         return MaterialApp(
           title: 'Sweet Crush',
           debugShowCheckedModeBanner: false,
-          locale: lang.locale,
-          supportedLocales: [
-            for (final l in AppLang.values) l.locale,
+          navigatorObservers: [
+            FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
           ],
+          locale: lang.locale,
+          supportedLocales: [for (final l in AppLang.values) l.locale],
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,

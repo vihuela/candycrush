@@ -46,11 +46,8 @@ jobs:
           storeFile=prod.keystore
           EOF
 
-      - name: 构建 prod APK（正式签名 / SEO 包名）
-        run: flutter build apk --release --flavor prod
-
-      - name: 构建 dev APK（debug 签名）
-        run: flutter build apk --release --flavor dev
+      - name: 构建 prod AAB（正式签名 / SEO 包名）
+        run: flutter build appbundle --release --flavor prod
 
       - name: 清理签名材料
         if: always()
@@ -58,10 +55,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sweet-crush-prod
-          path: build/app/outputs/flutter-apk/app-prod-release.apk
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sweet-crush-dev
-          path: build/app/outputs/flutter-apk/app-dev-release.apk
+          name: sweet-crush-prod-aab
+          path: build/app/outputs/bundle/prodRelease/app-prod-release.aab
