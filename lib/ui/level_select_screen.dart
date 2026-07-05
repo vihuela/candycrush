@@ -41,51 +41,53 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
           child: Column(
             children: [
               const SizedBox(height: 16),
-              // 标题行 + 设置入口
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: Column(
-                      children: [
-                        const Text(
-                          '🍬 Sweet Crush',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            shadows: [
-                              Shadow(
-                                  color: Color(0xFF7B2FBF),
-                                  offset: Offset(0, 4),
-                                  blurRadius: 0),
-                              Shadow(
-                                  color: Color(0x66000000),
-                                  offset: Offset(0, 8),
-                                  blurRadius: 16),
-                            ],
+              // 标题行 + 设置入口（两侧对称占位，标题永不与按钮重叠）
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(width: 40), // 与右侧设置按钮对称，保持标题居中
+                    Expanded(
+                      child: Column(
+                        children: [
+                          const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '🍬 Sweet Crush',
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontSize: 34,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                shadows: [
+                                  Shadow(
+                                      color: Color(0xFF7B2FBF),
+                                      offset: Offset(0, 4),
+                                      blurRadius: 0),
+                                  Shadow(
+                                      color: Color(0x66000000),
+                                      offset: Offset(0, 8),
+                                      blurRadius: 16),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          Lang.t.subtitle,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white70,
-                            letterSpacing: 2,
+                          const SizedBox(height: 4),
+                          Text(
+                            Lang.t.subtitle,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white70,
+                              letterSpacing: 2,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  // 设置小入口（右上角）
-                  Positioned(
-                    right: 14,
-                    top: 0,
-                    child: GestureDetector(
+                    // 设置小入口
+                    GestureDetector(
                       onTap: _showSettingsMenu,
                       child: Container(
                         padding: const EdgeInsets.all(9),
@@ -99,8 +101,8 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
                             color: Colors.white70, size: 22),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 14),
               _buildModeTabs(),
@@ -264,66 +266,79 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
   }
 
   Widget _buildModeTabs() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0x59120A28),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: GameMode.values.map((m) {
-          final selected = m == _mode;
-          return GestureDetector(
-            onTap: () => setState(() => _mode = m),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              decoration: BoxDecoration(
-                gradient: selected
-                    ? const LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Color(0xFFFF8AC5), Color(0xFFB44BE0)],
-                      )
-                    : null,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: selected
-                    ? const [
-                        BoxShadow(
-                            color: Color(0x66E255A8), blurRadius: 10),
-                      ]
-                    : null,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    switch (m) {
-                      GameMode.classic => Icons.grid_view_rounded,
-                      GameMode.collect => Icons.shopping_basket_rounded,
-                      GameMode.timed => Icons.timer_rounded,
-                    },
-                    size: 17,
-                    color: selected ? Colors.white : Colors.white54,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: const Color(0x59120A28),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white24),
+        ),
+        // 三等分，长文案（如日语）自动缩放，不会溢出
+        child: Row(
+          children: GameMode.values.map((m) {
+            final selected = m == _mode;
+            return Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _mode = m),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    gradient: selected
+                        ? const LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xFFFF8AC5), Color(0xFFB44BE0)],
+                          )
+                        : null,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: selected
+                        ? const [
+                            BoxShadow(
+                                color: Color(0x66E255A8), blurRadius: 10),
+                          ]
+                        : null,
                   ),
-                  const SizedBox(width: 5),
-                  Text(
-                    _modeLabel(m),
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w500,
-                      color: selected ? Colors.white : Colors.white54,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          switch (m) {
+                            GameMode.classic => Icons.grid_view_rounded,
+                            GameMode.collect =>
+                              Icons.shopping_basket_rounded,
+                            GameMode.timed => Icons.timer_rounded,
+                          },
+                          size: 17,
+                          color: selected ? Colors.white : Colors.white54,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _modeLabel(m),
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color:
+                                selected ? Colors.white : Colors.white54,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
