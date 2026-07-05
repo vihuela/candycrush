@@ -12,14 +12,6 @@ enum GameMode {
   timed,
 }
 
-extension GameModeName on GameMode {
-  String get label => switch (this) {
-        GameMode.classic => '经典',
-        GameMode.collect => '收集',
-        GameMode.timed => '限时',
-      };
-}
-
 /// 关卡配置。
 class LevelConfig {
   const LevelConfig({

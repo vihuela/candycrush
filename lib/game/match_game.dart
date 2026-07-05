@@ -15,6 +15,7 @@ import 'candy_spec.dart';
 import 'effects.dart';
 import 'levels.dart';
 import 'sfx.dart';
+import '../i18n/strings.dart';
 
 enum GameStatus { playing, won, lost }
 
@@ -328,7 +329,7 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
     // 死局自动洗牌
     if (!board.hasAnyMove() && status == GameStatus.playing) {
       _world.add(FloatingText(
-        text: '无可消除，洗牌！',
+        text: Lang.t.shuffleNotice,
         at: Vector2(size.x / 2, size.y / 2),
         fontSize: 26,
       ));
@@ -398,7 +399,7 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
 
     // 连锁飘字
     if (ev.cascade >= 2 && ev.cleared.isNotEmpty) {
-      final words = ['好！', '妙极了！', '太棒了！', '无敌连锁!'];
+      final words = Lang.t.comboWords;
       final word = words[min(ev.cascade - 2, words.length - 1)];
       final at = cellCenter(ev.cleared[ev.cleared.length ~/ 2]);
       _world.add(FloatingText(

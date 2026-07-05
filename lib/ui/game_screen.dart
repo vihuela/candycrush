@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../game/candy_spec.dart';
 import '../game/levels.dart';
 import '../game/match_game.dart';
+import '../i18n/strings.dart';
 import 'common.dart';
 
 /// 对局页：Flame 画布 + HUD + 道具栏 + 结算弹窗。
@@ -140,8 +141,8 @@ class _GameScreenState extends State<GameScreen> {
               _pill(
                 child: Text(
                   mode == GameMode.timed
-                      ? '限时挑战'
-                      : '第 ${widget.level.id} 关',
+                      ? Lang.t.timedTitle
+                      : Lang.t.levelLabel(widget.level.id),
                   style: const TextStyle(
                     fontFamily: 'Fredoka',
                     fontSize: 15,
@@ -319,7 +320,7 @@ class _GameScreenState extends State<GameScreen> {
           ),
           Center(
             child: Text(
-              '目标 ${widget.level.targetScore}',
+              Lang.t.goalLabel(widget.level.targetScore),
               style: const TextStyle(
                 fontFamily: 'Fredoka',
                 fontSize: 11,
@@ -343,19 +344,19 @@ class _GameScreenState extends State<GameScreen> {
           _boosterButton(
             BoosterType.hammer,
             Icons.gavel_rounded,
-            '锤子',
+            Lang.t.hammer,
             const Color(0xFFFFA726),
           ),
           _boosterButton(
             BoosterType.bomb,
             Icons.local_fire_department_rounded,
-            '炸弹',
+            Lang.t.bomb,
             const Color(0xFFFF5252),
           ),
           _boosterButton(
             BoosterType.shuffle,
             Icons.cached_rounded,
-            '洗牌',
+            Lang.t.shuffle,
             const Color(0xFF40C4FF),
           ),
         ],
@@ -477,7 +478,7 @@ class _GameScreenState extends State<GameScreen> {
           ),
           const SizedBox(height: 5),
           Text(
-            armed ? '点击目标' : label,
+            armed ? Lang.t.tapTarget : label,
             style: TextStyle(
               fontFamily: 'Fredoka',
               fontSize: 13,
@@ -562,12 +563,12 @@ class _ResultDialog extends StatelessWidget {
 
   String get _title {
     if (mode == GameMode.timed) {
-      return isNewBest ? '🏆 新纪录！' : '⏱️ 时间到！';
+      return isNewBest ? Lang.t.newRecordTitle : Lang.t.timeUpTitle;
     }
     if (won) {
-      return onNext == null ? '👑 全部通关！' : '🎉 过关啦！';
+      return onNext == null ? Lang.t.allClearTitle : Lang.t.winTitle;
     }
-    return '😢 差一点点';
+    return Lang.t.loseTitle;
   }
 
   @override
@@ -607,7 +608,7 @@ class _ResultDialog extends StatelessWidget {
               const SizedBox(height: 16),
             ],
             Text(
-              '得分  $score',
+              '${Lang.t.scoreLabel}  $score',
               style: const TextStyle(
                 fontFamily: 'Fredoka',
                 fontSize: 24,
@@ -625,7 +626,7 @@ class _ResultDialog extends StatelessWidget {
                         color: Color(0xFFFFD31A), size: 18),
                     const SizedBox(width: 5),
                     Text(
-                      '最佳纪录  $best',
+                      '${Lang.t.bestPrefix}  $best',
                       style: const TextStyle(
                           fontSize: 15, color: Colors.white70),
                     ),
@@ -634,7 +635,7 @@ class _ResultDialog extends StatelessWidget {
               )
             else if (mode == GameMode.classic)
               Text(
-                '目标  $target',
+                Lang.t.goalLabel(target),
                 style:
                     const TextStyle(fontSize: 15, color: Colors.white60),
               ),
@@ -642,28 +643,28 @@ class _ResultDialog extends StatelessWidget {
             // 主操作
             if (mode == GameMode.timed)
               CandyButton(
-                label: '再来一局',
+                label: Lang.t.playAgain,
                 color: const Color(0xFFFF7043),
                 width: 200,
                 onTap: onRetry,
               )
             else if (won && onNext != null)
               CandyButton(
-                label: '下一关  ▶',
+                label: Lang.t.nextLevel,
                 color: const Color(0xFF35D461),
                 width: 200,
                 onTap: onNext!,
               )
             else if (won)
               CandyButton(
-                label: '返回选关',
+                label: Lang.t.backToLevels,
                 color: const Color(0xFF35D461),
                 width: 200,
                 onTap: onExit,
               )
             else
               CandyButton(
-                label: '重试',
+                label: Lang.t.retry,
                 color: const Color(0xFF35D461),
                 width: 200,
                 onTap: onRetry,
@@ -676,14 +677,14 @@ class _ResultDialog extends StatelessWidget {
                 if (won && mode != GameMode.timed) ...[
                   _SecondaryButton(
                     icon: Icons.refresh_rounded,
-                    label: '重玩',
+                    label: Lang.t.replay,
                     onTap: onRetry,
                   ),
                   const SizedBox(width: 26),
                 ],
                 _SecondaryButton(
                   icon: Icons.home_rounded,
-                  label: '返回',
+                  label: Lang.t.back,
                   onTap: onExit,
                 ),
               ],
