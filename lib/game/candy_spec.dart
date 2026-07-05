@@ -17,12 +17,12 @@ enum BoosterType { hammer, bomb, shuffle }
 
 class CandyPalette {
   static const Map<CandyColor, Color> base = {
-    CandyColor.red: Color(0xFFFF3B4E),
-    CandyColor.orange: Color(0xFFFF9F1A),
-    CandyColor.yellow: Color(0xFFFFD31A),
-    CandyColor.green: Color(0xFF35D461),
-    CandyColor.blue: Color(0xFF2FA8FF),
-    CandyColor.purple: Color(0xFFB45CFF),
+    CandyColor.red: Color(0xFFFF2D45),
+    CandyColor.orange: Color(0xFFFF9500),
+    CandyColor.yellow: Color(0xFFFFCE0A),
+    CandyColor.green: Color(0xFF23CE58),
+    CandyColor.blue: Color(0xFF1E9FFF),
+    CandyColor.purple: Color(0xFFAE4BFF),
   };
 
   static Color light(CandyColor c) => _shift(base[c]!, 0.30);

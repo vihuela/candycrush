@@ -17,7 +17,7 @@ class CandyPainter {
     CandyColor color,
     SpecialType special,
   ) {
-    final r = size * 0.42;
+    final r = size * 0.44;
     if (special == SpecialType.colorBomb) {
       _paintColorBomb(canvas, r);
       return;
@@ -29,10 +29,79 @@ class CandyPainter {
 
     final path = shapePath(color, r);
     _drawBody(canvas, path, r, color);
+    _drawSignatureDetail(canvas, path, r, color);
 
     if (special == SpecialType.stripedH || special == SpecialType.stripedV) {
       _paintStripes(canvas, path, r, special == SpecialType.stripedH);
     }
+  }
+
+  /// 每种糖的专属细节（参考 Candy Crush：绿色方糖立体面板、
+  /// 蓝色棒棒糖螺旋纹、紫色糖粒点缀）。
+  static void _drawSignatureDetail(
+      Canvas canvas, Path path, double r, CandyColor c) {
+    canvas.save();
+    canvas.clipPath(path);
+    switch (c) {
+      case CandyColor.green:
+        // 立体前面板
+        final face = RRect.fromRectAndRadius(
+          Rect.fromCenter(
+              center: Offset(0, r * 0.04), width: r * 1.30, height: r * 1.30),
+          Radius.circular(r * 0.40),
+        );
+        canvas.drawRRect(
+          face,
+          Paint()
+            ..shader = Gradient.linear(
+              Offset(0, -r * 0.6),
+              Offset(0, r * 0.7),
+              [
+                shiftLightness(CandyPalette.base[c]!, 0.22)
+                    .withValues(alpha: 0.65),
+                shiftLightness(CandyPalette.base[c]!, 0.05)
+                    .withValues(alpha: 0.0),
+              ],
+            ),
+        );
+        canvas.drawRRect(
+          face,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = r * 0.05
+            ..color = const Color(0x59FFFFFF),
+        );
+      case CandyColor.blue:
+        // 棒棒糖螺旋纹
+        final swirl = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = r * 0.15
+          ..strokeCap = StrokeCap.round
+          ..color = const Color(0x66FFFFFF);
+        canvas.drawArc(
+            Rect.fromCircle(center: Offset(0, r * 0.18), radius: r * 0.60),
+            pi * 0.10, pi * 0.75, false, swirl);
+        canvas.drawArc(
+            Rect.fromCircle(center: Offset(0, -r * 0.08), radius: r * 0.88),
+            pi * 0.30, pi * 0.45, false, swirl);
+      case CandyColor.purple:
+        // 糖粒点缀
+        final rng = Random(3);
+        for (var i = 0; i < 8; i++) {
+          final a = rng.nextDouble() * 2 * pi;
+          final d = sqrt(rng.nextDouble()) * r * 0.75;
+          canvas.drawCircle(
+            Offset(cos(a) * d, sin(a) * d),
+            r * 0.055,
+            Paint()..color = const Color(0xB3F3E3FF),
+          );
+        }
+      case CandyColor.red:
+      case CandyColor.orange:
+      case CandyColor.yellow:
+        break;
+    }
+    canvas.restore();
   }
 
   /// 每种颜色一个专属形状，颜色+形状双重区分。
@@ -125,37 +194,41 @@ class CandyPainter {
 
   static void _drawBody(Canvas canvas, Path path, double r, CandyColor c) {
     final base = CandyPalette.base[c]!;
-    final light = shiftLightness(base, 0.32);
-    final lighter = shiftLightness(base, 0.18);
-    final dark1 = shiftLightness(base, -0.12);
-    final dark2 = shiftLightness(base, -0.28);
+    final light = shiftLightness(base, 0.30);
+    final lighter = shiftLightness(base, 0.15);
+    final dark1 = shiftLightness(base, -0.14);
+    final dark2 = shiftLightness(base, -0.32);
 
     // 1. 柔和投影
     canvas.drawPath(
       path.shift(Offset(0, r * 0.13)),
       Paint()
-        ..color = const Color(0x38000000)
+        ..color = const Color(0x40000000)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.12),
     );
 
-    // 2. 渐变主体
+    // 2. 渐变主体（更深的底部暗边，增强体积）
     canvas.drawPath(
       path,
       Paint()
         ..shader = Gradient.radial(
-          Offset(-r * 0.32, -r * 0.40),
-          r * 2.35,
+          Offset(-r * 0.30, -r * 0.42),
+          r * 2.4,
           [light, lighter, base, dark1, dark2],
-          const [0.0, 0.22, 0.50, 0.78, 1.0],
+          const [0.0, 0.20, 0.48, 0.76, 1.0],
         ),
     );
 
     canvas.save();
     canvas.clipPath(path);
 
+    final b = path.getBounds();
+
     // 3. 底部反弹光（糖果的通透感）
     final bounce = Rect.fromCenter(
-        center: Offset(0, r * 0.76), width: r * 1.9, height: r * 1.1);
+        center: Offset(0, b.bottom - r * 0.10),
+        width: b.width * 0.9,
+        height: r * 1.0);
     canvas.drawOval(
       bounce,
       Paint()
@@ -163,19 +236,26 @@ class CandyPainter {
           bounce.center,
           bounce.width / 2,
           [
-            shiftLightness(base, 0.24).withValues(alpha: 0.55),
-            shiftLightness(base, 0.24).withValues(alpha: 0.0),
+            shiftLightness(base, 0.26).withValues(alpha: 0.60),
+            shiftLightness(base, 0.26).withValues(alpha: 0.0),
           ],
         ),
     );
 
-    // 4. 内缘阴影（贴边一圈暗色，增强体积）
+    // 4. 内缘阴影（底部更重，模拟接触暗边）
     canvas.drawPath(
       path,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = r * 0.20
-        ..color = dark2.withValues(alpha: 0.30)
+        ..strokeWidth = r * 0.24
+        ..shader = Gradient.linear(
+          Offset(0, b.top),
+          Offset(0, b.bottom),
+          [
+            dark2.withValues(alpha: 0.10),
+            dark2.withValues(alpha: 0.50),
+          ],
+        )
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.06),
     );
 
@@ -184,46 +264,47 @@ class CandyPainter {
       path,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = r * 0.09
+        ..strokeWidth = r * 0.08
         ..shader = Gradient.linear(
-          Offset(0, -r * 1.1),
-          Offset(0, r * 0.5),
+          Offset(0, b.top),
+          Offset(0, b.center.dy),
           [
-            const Color(0xB3FFFFFF),
+            const Color(0x8CFFFFFF),
             const Color(0x00FFFFFF),
           ],
         ),
     );
 
-    // 6. 大高光（顶部弧形柔光）
-    final gloss = Rect.fromCenter(
-      center: Offset(-r * 0.10, -r * 0.55),
-      width: r * 1.30,
-      height: r * 0.72,
+    // 6. 月牙形轮廓高光（贴合左上曲线，Candy Crush 的灵魂细节）
+    final crescentRect = Rect.fromCenter(
+      center: b.center,
+      width: b.width * 0.66,
+      height: b.height * 0.66,
     );
-    canvas.drawOval(
-      gloss,
+    canvas.drawArc(
+      crescentRect,
+      pi * 1.02,
+      pi * 0.50,
+      false,
       Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = r * 0.17
+        ..strokeCap = StrokeCap.round
         ..shader = Gradient.linear(
-          gloss.topCenter,
-          gloss.bottomCenter,
+          Offset(b.left, b.top),
+          Offset(b.center.dx, b.center.dy),
           [
-            const Color(0xB8FFFFFF),
-            const Color(0x08FFFFFF),
+            const Color(0xF2FFFFFF),
+            const Color(0x40FFFFFF),
           ],
         ),
     );
 
-    // 7. 热点高光（小而亮）
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(-r * 0.40, -r * 0.48),
-        width: r * 0.40,
-        height: r * 0.26,
-      ),
-      Paint()
-        ..color = const Color(0xF2FFFFFF)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.03),
+    // 7. 热点高光
+    canvas.drawCircle(
+      Offset(b.center.dx - b.width * 0.16, b.top + b.height * 0.16),
+      r * 0.09,
+      Paint()..color = const Color(0xFAFFFFFF),
     );
 
     canvas.restore();
