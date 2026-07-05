@@ -507,82 +507,87 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
   Widget _buildTimedBody() {
     final best = Progress.timedBest();
     final level = timedLevels.first;
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 36),
-        padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF35386E), Color(0xFF241543)],
-          ),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: Colors.white38, width: 1.5),
-          boxShadow: const [
-            BoxShadow(color: Color(0x66000000), blurRadius: 20, offset: Offset(0, 8)),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('⏱️', style: TextStyle(fontSize: 56)),
-            const SizedBox(height: 10),
-            Text(
-              Lang.t.timedTitle,
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              Lang.t.timedDesc(level.timeLimit ?? 60),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 14, color: Colors.white70, height: 1.5),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0x40120A28),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white24),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.emoji_events_rounded,
-                      color: Color(0xFFFFD31A), size: 26),
-                  const SizedBox(width: 10),
-                  Text(
-                    best > 0
-                        ? '${Lang.t.bestPrefix}  $best'
-                        : Lang.t.noRecord,
-                    style: const TextStyle(
-                      fontFamily: 'Fredoka',
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
+    return LayoutBuilder(builder: (context, constraints) {
+      return Stack(
+        children: [
+          ..._decorCandies(constraints.maxWidth, constraints.maxHeight),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _TimedOrb(onTap: () => _openLevel(level)),
+                const SizedBox(height: 26),
+                Text(
+                  Lang.t.timedTitle,
+                  style: const TextStyle(
+                    fontFamily: 'Fredoka',
+                    fontSize: 30,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(color: Color(0x66000000), offset: Offset(0, 3)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  Lang.t.timedDesc(level.timeLimit ?? 60),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 14, color: Colors.white70, height: 1.6),
+                ),
+                const SizedBox(height: 22),
+                // 最佳纪录
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 22, vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x4D241543), Color(0x66120A28)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: best > 0
+                          ? const Color(0xB3FFD31A)
+                          : Colors.white24,
+                      width: best > 0 ? 1.8 : 1,
                     ),
                   ),
-                ],
-              ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.emoji_events_rounded,
+                          color: Color(0xFFFFD31A), size: 26),
+                      const SizedBox(width: 10),
+                      Text(
+                        best > 0
+                            ? '${Lang.t.bestPrefix}  $best'
+                            : Lang.t.noRecord,
+                        style: const TextStyle(
+                          fontFamily: 'Fredoka',
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 28),
+                CandyButton(
+                  label: Lang.t.startChallenge,
+                  color: const Color(0xFFFF7043),
+                  width: 210,
+                  onTap: () => _openLevel(level),
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-            CandyButton(
-              label: Lang.t.startChallenge,
-              color: const Color(0xFFFF7043),
-              width: 200,
-              onTap: () => _openLevel(level),
-            ),
-          ],
-        ),
-      ),
-    );
+          ),
+        ],
+      );
+    });
   }
 }
 
@@ -802,4 +807,114 @@ class _PathPainter extends CustomPainter {
   @override
   bool shouldRepaint(_PathPainter oldDelegate) =>
       oldDelegate.points != points;
+}
+
+/// 限时挑战主视觉：脉动的大糖果球。
+class _TimedOrb extends StatefulWidget {
+  const _TimedOrb({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  State<_TimedOrb> createState() => _TimedOrbState();
+}
+
+class _TimedOrbState extends State<_TimedOrb>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const d = 118.0;
+    const color = Color(0xFFFF7043);
+    final hsl = HSLColor.fromColor(color);
+    final rim =
+        hsl.withLightness((hsl.lightness - 0.30).clamp(0.0, 1.0)).toColor();
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: SizedBox(
+        width: d + 60,
+        height: d + 60,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AnimatedBuilder(
+              animation: _pulse,
+              builder: (context, _) {
+                final t = _pulse.value;
+                return Container(
+                  width: d + 16 + 30 * t,
+                  height: d + 16 + 30 * t,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.5 * (1 - t)),
+                      width: 3,
+                    ),
+                  ),
+                );
+              },
+            ),
+            Container(
+              width: d,
+              height: d,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0.0, 0.55, 1.0],
+                  colors: [Color(0xFFFF9E7A), color, Color(0xFFD84315)],
+                ),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.75),
+                  width: 3,
+                ),
+                boxShadow: [
+                  BoxShadow(color: rim, offset: const Offset(0, 6)),
+                  const BoxShadow(
+                    color: Color(0x73000000),
+                    offset: Offset(0, 12),
+                    blurRadius: 14,
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Positioned(
+                    top: d * 0.09,
+                    child: Container(
+                      width: d * 0.6,
+                      height: d * 0.24,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(d * 0.14),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0x8CFFFFFF), Color(0x00FFFFFF)],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.timer_rounded,
+                      color: Colors.white, size: 54),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
