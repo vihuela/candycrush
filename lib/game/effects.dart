@@ -76,6 +76,53 @@ void _drawStar(Canvas canvas, double r, Paint paint) {
   canvas.drawPath(path, paint);
 }
 
+/// 指定颜色的碎裂粒子（冰渣/饼干屑等障碍破碎用）。
+ParticleSystemComponent burstColorParticles(
+  Vector2 at,
+  Color color,
+  double cellSize, {
+  int count = 8,
+}) {
+  return ParticleSystemComponent(
+    position: at,
+    priority: 60,
+    particle: Particle.generate(
+      count: count,
+      lifespan: 0.5,
+      generator: (i) {
+        final angle = _rng.nextDouble() * 2 * pi;
+        final speed = cellSize * (2.5 + _rng.nextDouble() * 5);
+        final vel = Vector2(cos(angle), sin(angle)) * speed;
+        final radius = cellSize * (0.04 + _rng.nextDouble() * 0.07);
+        final c = i % 3 == 0 ? shiftLightness(color, 0.18) : color;
+        return AcceleratedParticle(
+          speed: vel,
+          acceleration: Vector2(0, cellSize * 16),
+          child: ComputedParticle(
+            renderer: (canvas, particle) {
+              final t = particle.progress;
+              final paint = Paint()
+                ..color = c.withValues(alpha: (1 - t).clamp(0, 1));
+              // 方形碎片，带旋转
+              canvas.save();
+              canvas.rotate(t * 4 + i);
+              canvas.drawRect(
+                Rect.fromCenter(
+                  center: Offset.zero,
+                  width: radius * 1.7 * (1 - t * 0.5),
+                  height: radius * 1.7 * (1 - t * 0.5),
+                ),
+                paint,
+              );
+              canvas.restore();
+            },
+          ),
+        );
+      },
+    ),
+  );
+}
+
 /// 条纹糖引爆时的横/竖光束。
 class BeamEffect extends PositionComponent {
   BeamEffect({

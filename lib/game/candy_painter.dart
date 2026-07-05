@@ -312,6 +312,127 @@ class CandyPainter {
 
   // ---------- 特殊糖 ----------
 
+  /// 冰冻覆盖层：半透明冰壳 + 裂纹 + 高光。
+  static void paintIce(Canvas canvas, double size) {
+    final half = size * 0.46;
+    final rect = Rect.fromCenter(
+        center: Offset.zero, width: half * 2, height: half * 2);
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(size * 0.2));
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..shader = Gradient.linear(
+          rect.topLeft,
+          rect.bottomRight,
+          [
+            const Color(0x8CD9F2FF),
+            const Color(0x59A9DDFF),
+            const Color(0x8CBFE9FF),
+          ],
+          const [0.0, 0.5, 1.0],
+        ),
+    );
+    canvas.drawRRect(
+      rrect.deflate(1),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size * 0.045
+        ..color = const Color(0xB3EAF8FF),
+    );
+    // 裂纹
+    final crack = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size * 0.028
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0x8CFFFFFF);
+    final path = Path()
+      ..moveTo(-half * 0.5, -half * 0.6)
+      ..lineTo(-half * 0.1, -half * 0.15)
+      ..lineTo(-half * 0.35, half * 0.3)
+      ..moveTo(-half * 0.1, -half * 0.15)
+      ..lineTo(half * 0.35, half * 0.05)
+      ..lineTo(half * 0.2, half * 0.55);
+    canvas.drawPath(path, crack);
+    // 顶部亮斜光
+    canvas.save();
+    canvas.clipRRect(rrect);
+    canvas.rotate(-0.5);
+    canvas.drawRect(
+      Rect.fromCenter(
+          center: Offset(-half * 0.4, 0), width: size * 0.22, height: size * 1.6),
+      Paint()..color = const Color(0x40FFFFFF),
+    );
+    canvas.restore();
+  }
+
+  /// 饼干障碍：烤饼干块 + 巧克力豆。
+  static void paintCookie(Canvas canvas, double size) {
+    final half = size * 0.44;
+    final rect = Rect.fromCenter(
+        center: Offset.zero, width: half * 2, height: half * 2);
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(size * 0.24));
+    // 投影
+    canvas.drawRRect(
+      rrect.shift(Offset(0, size * 0.05)),
+      Paint()
+        ..color = const Color(0x40000000)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, size * 0.04),
+    );
+    // 饼干体
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..shader = Gradient.radial(
+          Offset(-half * 0.35, -half * 0.4),
+          size * 1.1,
+          [
+            const Color(0xFFE8B56A),
+            const Color(0xFFC98F42),
+            const Color(0xFF9C6526),
+          ],
+          const [0.0, 0.55, 1.0],
+        ),
+    );
+    // 烤边
+    canvas.drawRRect(
+      rrect.deflate(size * 0.02),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size * 0.05
+        ..color = const Color(0x66703F12),
+    );
+    // 巧克力豆
+    final rng = Random(5);
+    for (var i = 0; i < 5; i++) {
+      final dx = (rng.nextDouble() - 0.5) * half * 1.3;
+      final dy = (rng.nextDouble() - 0.5) * half * 1.3;
+      canvas.drawCircle(
+        Offset(dx, dy),
+        size * 0.06,
+        Paint()..color = const Color(0xFF5A3319),
+      );
+      canvas.drawCircle(
+        Offset(dx - size * 0.015, dy - size * 0.015),
+        size * 0.02,
+        Paint()..color = const Color(0x66FFFFFF),
+      );
+    }
+    // 顶部柔光
+    canvas.save();
+    canvas.clipRRect(rrect);
+    canvas.drawOval(
+      Rect.fromCenter(
+          center: Offset(0, -half * 0.65), width: half * 1.6, height: half * 0.8),
+      Paint()
+        ..shader = Gradient.linear(
+          Offset(0, -half),
+          Offset(0, -half * 0.2),
+          [const Color(0x59FFFFFF), const Color(0x00FFFFFF)],
+        ),
+    );
+    canvas.restore();
+  }
+
   static void _paintStripes(
       Canvas canvas, Path body, double r, bool horizontal) {
     canvas.save();

@@ -10,6 +10,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 
 import 'board.dart';
 import 'candy_component.dart';
+import 'obstacle_component.dart';
 import 'candy_sprites.dart';
 import 'candy_spec.dart';
 import 'effects.dart';
@@ -34,6 +35,7 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
   late Vector2 boardOrigin;
 
   final Map<Pos, CandyComponent> candyMap = {};
+  final Map<Pos, ObstacleComponent> obstacleMap = {};
 
   int score = 0;
   late int movesLeft = level.moves;
@@ -86,7 +88,14 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
       ..viewfinder.anchor = Anchor.topLeft;
     addAll([_world, _camera]);
 
-    board = Board(rows, cols, colorCount: level.colorCount);
+    board = Board(
+      rows,
+      cols,
+      colorCount: level.colorCount,
+      holes: level.holesBuilder?.call(),
+      iceCells: level.iceBuilder?.call(),
+      cookieCells: level.cookieBuilder?.call(),
+    );
     _layout();
     // 按设备像素比预渲染糖果纹理，连击时不再矢量重绘
     CandySprites.dpr =
@@ -97,6 +106,7 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
       cellSize: cellSize,
       rows: rows,
       cols: cols,
+      holes: board.holesView,
     ));
     _spawnAll();
   }
@@ -128,7 +138,7 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
     final c = ((world.x - boardOrigin.x) / cellSize).floor();
     final r = ((world.y - boardOrigin.y) / cellSize).floor();
     final p = Pos(r, c);
-    return board.inBounds(p) ? p : null;
+    return board.isPlayable(p) ? p : null;
   }
 
   void _spawnAll() {
@@ -136,17 +146,32 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
       comp.removeFromParent();
     }
     candyMap.clear();
+    for (final comp in obstacleMap.values) {
+      comp.removeFromParent();
+    }
+    obstacleMap.clear();
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
         final pos = Pos(r, c);
-        final cell = board.at(pos)!;
-        final comp = CandyComponent(
-          cell: cell,
-          gridPos: pos,
-          cellSize: cellSize,
-        )..position = cellCenter(pos);
-        candyMap[pos] = comp;
-        _world.add(comp);
+        final cell = board.at(pos);
+        if (cell != null) {
+          final comp = CandyComponent(
+            cell: cell,
+            gridPos: pos,
+            cellSize: cellSize,
+          )..position = cellCenter(pos);
+          candyMap[pos] = comp;
+          _world.add(comp);
+        }
+        final obstacle = board.obstacleAt(pos);
+        if (obstacle != ObstacleType.none) {
+          final comp = ObstacleComponent(
+            type: obstacle,
+            cellSize: cellSize,
+          )..position = cellCenter(pos);
+          obstacleMap[pos] = comp;
+          _world.add(comp);
+        }
       }
     }
   }
@@ -378,6 +403,33 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
       if (ev.cleared.length >= 5) shakeScreen(amplitude: 3, duration: 0.15);
     }
 
+    // 障碍破碎效果
+    if (ev.iceBroken.isNotEmpty) {
+      Sfx.ice();
+      for (final p in ev.iceBroken) {
+        obstacleMap.remove(p)?.playBreak();
+        _world.add(burstColorParticles(
+          cellCenter(p),
+          const Color(0xFFBFE8FF),
+          cellSize,
+          count: 8,
+        ));
+      }
+    }
+    if (ev.cookiesBroken.isNotEmpty) {
+      Sfx.cookie();
+      HapticFeedback.mediumImpact();
+      for (final p in ev.cookiesBroken) {
+        obstacleMap.remove(p)?.playBreak();
+        _world.add(burstColorParticles(
+          cellCenter(p),
+          const Color(0xFFC9964B),
+          cellSize,
+          count: 10,
+        ));
+      }
+    }
+
     // 条纹光束
     for (final p in ev.stripesTriggered) {
       final cell = candyMap[p]?.cell;
@@ -546,15 +598,17 @@ class MatchGame extends FlameGame with DragCallbacks, TapCallbacks {
 
   void _checkEnd() {
     if (status != GameStatus.playing) return;
+    final obstaclesCleared =
+        !level.clearObstacles || board.obstacleCount == 0;
     switch (mode) {
       case GameMode.classic:
-        if (score >= level.targetScore) {
+        if (score >= level.targetScore && obstaclesCleared) {
           status = GameStatus.won;
         } else if (movesLeft <= 0) {
           status = GameStatus.lost;
         }
       case GameMode.collect:
-        if (collectDone) {
+        if (collectDone && obstaclesCleared) {
           status = GameStatus.won;
         } else if (movesLeft <= 0) {
           status = GameStatus.lost;
@@ -612,12 +666,14 @@ class _BoardBackground extends PositionComponent {
     required this.cellSize,
     required this.rows,
     required this.cols,
+    required this.holes,
   }) : super(priority: -10);
 
   final Vector2 origin;
   final double cellSize;
   final int rows;
   final int cols;
+  final Set<Pos> holes;
 
   @override
   void render(Canvas canvas) {
@@ -673,6 +729,7 @@ class _BoardBackground extends PositionComponent {
       ..color = const Color(0x14FFFFFF);
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
+        if (holes.contains(Pos(r, c))) continue;
         final rect = Rect.fromLTWH(
           origin.x + c * cellSize,
           origin.y + r * cellSize,

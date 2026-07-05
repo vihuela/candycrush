@@ -15,6 +15,17 @@ enum SpecialType {
 /// 道具类型。
 enum BoosterType { hammer, bomb, shuffle }
 
+/// 格子障碍状态。
+enum ObstacleType {
+  none,
+
+  /// 冰冻：糖果被冰住，参与消除一次破冰（糖果保留），再消除才真正消掉。
+  ice,
+
+  /// 饼干：占据格子的硬障碍，无法交换，靠相邻消除炸开。
+  cookie,
+}
+
 class CandyPalette {
   static const Map<CandyColor, Color> base = {
     CandyColor.red: Color(0xFFFF2D45),

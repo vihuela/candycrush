@@ -46,6 +46,12 @@ void main() {
         } else if (c == 0) {
           CandyPainter.paint(
               canvas, cell, CandyColor.red, SpecialType.colorBomb);
+        } else if (c == 1) {
+          // 冰冻糖：糖果 + 冰壳
+          CandyPainter.paint(canvas, cell, CandyColor.blue, SpecialType.none);
+          CandyPainter.paintIce(canvas, cell);
+        } else if (c == 2) {
+          CandyPainter.paintCookie(canvas, cell);
         }
         canvas.restore();
       }

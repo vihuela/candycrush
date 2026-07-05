@@ -37,6 +37,8 @@ class ClearEvent {
     required this.score,
     required this.cascade,
     this.clearedByColor = const {},
+    this.iceBroken = const [],
+    this.cookiesBroken = const [],
     this.colorBombTriggered = false,
     this.stripesTriggered = const [],
     this.wrapsTriggered = const [],
@@ -56,9 +58,16 @@ class ClearEvent {
   /// 各颜色被消除的数量（收集模式用）。
   final Map<CandyColor, int> clearedByColor;
 
+  /// 本轮破开的冰冻格 / 饼干格。
+  final List<Pos> iceBroken;
+  final List<Pos> cookiesBroken;
+
   final bool colorBombTriggered;
   final List<Pos> stripesTriggered;
   final List<Pos> wrapsTriggered;
+
+  bool get isEmpty =>
+      cleared.isEmpty && iceBroken.isEmpty && cookiesBroken.isEmpty;
 }
 
 /// 下落移动：from 可能为 null（表示从顶部新生成）。
@@ -72,9 +81,21 @@ class FallMove {
 
 /// 消消乐棋盘核心逻辑，纯 Dart 无渲染依赖，方便单测。
 class Board {
-  Board(this.rows, this.cols, {Random? rng, int colorCount = 6})
-      : _rng = rng ?? Random(),
+  Board(
+    this.rows,
+    this.cols, {
+    Random? rng,
+    int colorCount = 6,
+    Set<Pos>? holes,
+    Set<Pos>? iceCells,
+    Set<Pos>? cookieCells,
+  })  : _rng = rng ?? Random(),
         _colorCount = colorCount.clamp(3, CandyColor.values.length) {
+    _holes = {...?holes};
+    obstacles = {
+      for (final p in {...?iceCells}) p: ObstacleType.ice,
+      for (final p in {...?cookieCells}) p: ObstacleType.cookie,
+    };
     _fillInitial();
   }
 
@@ -83,12 +104,30 @@ class Board {
   final Random _rng;
   final int _colorCount;
 
+  /// 挖洞格（异形棋盘），永不填充。
+  late final Set<Pos> _holes;
+
+  /// 障碍状态（冰冻/饼干）。
+  late final Map<Pos, ObstacleType> obstacles;
+
   late List<List<Cell?>> grid;
 
   Cell? at(Pos p) => grid[p.row][p.col];
 
+  bool isHole(Pos p) => _holes.contains(p);
+
+  Set<Pos> get holesView => _holes;
+
+  ObstacleType obstacleAt(Pos p) => obstacles[p] ?? ObstacleType.none;
+
+  /// 剩余障碍数（关卡目标用）。
+  int get obstacleCount => obstacles.length;
+
   bool inBounds(Pos p) =>
       p.row >= 0 && p.row < rows && p.col >= 0 && p.col < cols;
+
+  /// 可参与玩法的格子（非洞）。
+  bool isPlayable(Pos p) => inBounds(p) && !isHole(p);
 
   CandyColor _randColor() => CandyColor.values[_rng.nextInt(_colorCount)];
 
@@ -97,7 +136,12 @@ class Board {
     for (var attempt = 0; attempt < 50; attempt++) {
       grid = List.generate(
         rows,
-        (r) => List<Cell?>.generate(cols, (c) => Cell(_randColor())),
+        (r) => List<Cell?>.generate(
+          cols,
+          (c) => isHole(Pos(r, c)) || obstacleAt(Pos(r, c)) == ObstacleType.cookie
+              ? null
+              : Cell(_randColor()),
+        ),
       );
       _removeInitialMatches();
       if (hasAnyMove()) return;
@@ -109,6 +153,7 @@ class Board {
   void _removeInitialMatches() {
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
+        if (grid[r][c] == null) continue;
         var guard = 0;
         while (_formsMatchAt(r, c) && guard < 20) {
           grid[r][c] = Cell(_randColor());
@@ -141,6 +186,11 @@ class Board {
   /// 交换是否合法（能触发消除或含特殊糖组合）。
   bool isValidSwap(Pos a, Pos b) {
     if (!areAdjacent(a, b)) return false;
+    // 冰冻糖不能移动
+    if (obstacleAt(a) == ObstacleType.ice ||
+        obstacleAt(b) == ObstacleType.ice) {
+      return false;
+    }
     final ca = at(a);
     final cb = at(b);
     if (ca == null || cb == null) return false;
@@ -258,13 +308,21 @@ class Board {
     final wraps = <Pos>[];
     _expandSpecials(toClear, stripes, wraps);
 
-    // 4. 计分：基础 60/颗，特殊糖 +120，连锁翻倍
+    // 3.5 障碍结算：冰冻糖挡下本次消除、饼干被相邻消除炸开
+    final iceBroken = <Pos>[];
+    final cookiesBroken = <Pos>[];
+    _processObstacles(toClear, iceBroken, cookiesBroken);
+    // 冰冻格上的特殊糖生成点也被冰挡下
+    spawns.removeWhere((p, _) => iceBroken.contains(p));
+
+    // 4. 计分：基础 60/颗，特殊糖 +120，障碍 +90，连锁翻倍
     var score = 0;
     for (final p in toClear) {
       final cell = at(p);
       if (cell == null) continue;
       score += cell.isSpecial ? 180 : 60;
     }
+    score += (iceBroken.length + cookiesBroken.length) * 90;
     score *= cascade;
 
     // 5. 移除（生成点不移除，替换为特殊糖）
@@ -283,9 +341,38 @@ class Board {
       score: score,
       cascade: cascade,
       clearedByColor: byColor,
+      iceBroken: iceBroken,
+      cookiesBroken: cookiesBroken,
       stripesTriggered: stripes,
       wrapsTriggered: wraps,
     );
+  }
+
+  /// 障碍结算。冰冻格：破冰但糖果保留（从 toClear 移除）；
+  /// 饼干：被相邻消除或爆炸波及时破碎。
+  void _processObstacles(
+      Set<Pos> toClear, List<Pos> iceBroken, List<Pos> cookiesBroken) {
+    // 冰冻：挡下消除
+    for (final p in toClear.toList()) {
+      if (obstacleAt(p) == ObstacleType.ice) {
+        obstacles.remove(p);
+        iceBroken.add(p);
+        toClear.remove(p);
+      }
+    }
+    // 饼干：相邻有消除即破
+    final adjacent = <Pos>{};
+    for (final p in toClear) {
+      for (final d in const [Pos(0, 1), Pos(0, -1), Pos(1, 0), Pos(-1, 0)]) {
+        adjacent.add(Pos(p.row + d.row, p.col + d.col));
+      }
+    }
+    for (final p in adjacent) {
+      if (inBounds(p) && obstacleAt(p) == ObstacleType.cookie) {
+        obstacles.remove(p);
+        cookiesBroken.add(p);
+      }
+    }
   }
 
   /// 特殊糖 + 特殊糖 / 彩球组合。
@@ -376,6 +463,11 @@ class Board {
     }
     score *= cascade;
 
+    final iceBroken = <Pos>[];
+    final cookiesBroken = <Pos>[];
+    _processObstacles(toClear, iceBroken, cookiesBroken);
+    score += (iceBroken.length + cookiesBroken.length) * 90 * cascade;
+
     final byColor = _countColors(toClear);
     for (final p in toClear) {
       grid[p.row][p.col] = null;
@@ -387,6 +479,8 @@ class Board {
       score: score,
       cascade: cascade,
       clearedByColor: byColor,
+      iceBroken: iceBroken,
+      cookiesBroken: cookiesBroken,
       colorBombTriggered: colorBomb,
       stripesTriggered: stripes,
       wrapsTriggered: wraps,
@@ -521,29 +615,48 @@ class Board {
 
   // ---------- 重力与填充 ----------
 
-  /// 应用重力并从顶部补新糖，返回所有移动供动画使用。
+  /// 某格是否阻挡下落（洞和饼干把列切成独立分段）。
+  bool _isBarrier(Pos p) =>
+      isHole(p) || obstacleAt(p) == ObstacleType.cookie;
+
+  /// 应用重力并补新糖，返回所有移动供动画使用。
+  /// 列被洞/饼干分段，每段内部糖果下落、段顶补新糖。
   List<FallMove> applyGravity() {
     final moves = <FallMove>[];
     for (var c = 0; c < cols; c++) {
-      var writeRow = rows - 1;
-      for (var r = rows - 1; r >= 0; r--) {
-        final cell = grid[r][c];
-        if (cell != null) {
-          if (r != writeRow) {
-            grid[writeRow][c] = cell;
-            grid[r][c] = null;
-            moves.add(
-              FallMove(from: Pos(r, c), to: Pos(writeRow, c), cell: cell),
-            );
-          }
-          writeRow--;
+      var segEnd = rows - 1; // 段的底部（含）
+      while (segEnd >= 0) {
+        if (_isBarrier(Pos(segEnd, c))) {
+          segEnd--;
+          continue;
         }
-      }
-      // 顶部补新糖
-      for (var r = writeRow; r >= 0; r--) {
-        final cell = Cell(_randColor());
-        grid[r][c] = cell;
-        moves.add(FallMove(from: null, to: Pos(r, c), cell: cell));
+        // 找段顶
+        var segStart = segEnd;
+        while (segStart - 1 >= 0 && !_isBarrier(Pos(segStart - 1, c))) {
+          segStart--;
+        }
+        // 段内下落
+        var writeRow = segEnd;
+        for (var r = segEnd; r >= segStart; r--) {
+          final cell = grid[r][c];
+          if (cell != null) {
+            if (r != writeRow) {
+              grid[writeRow][c] = cell;
+              grid[r][c] = null;
+              moves.add(
+                FallMove(from: Pos(r, c), to: Pos(writeRow, c), cell: cell),
+              );
+            }
+            writeRow--;
+          }
+        }
+        // 段顶补新糖
+        for (var r = writeRow; r >= segStart; r--) {
+          final cell = Cell(_randColor());
+          grid[r][c] = cell;
+          moves.add(FallMove(from: null, to: Pos(r, c), cell: cell));
+        }
+        segEnd = segStart - 1;
       }
     }
     return moves;
@@ -554,11 +667,13 @@ class Board {
   bool hasAnyMove() {
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
-        if (grid[r][c]?.special == SpecialType.colorBomb) return true;
         final p = Pos(r, c);
+        if (obstacleAt(p) == ObstacleType.ice) continue;
+        if (grid[r][c]?.special == SpecialType.colorBomb) return true;
         for (final d in const [Pos(0, 1), Pos(1, 0)]) {
           final q = Pos(r + d.row, c + d.col);
           if (!inBounds(q)) continue;
+          if (obstacleAt(q) == ObstacleType.ice) continue;
           if (grid[q.row][q.col] == null || grid[r][c] == null) continue;
           _swap(p, q);
           final ok = _findMatches().isNotEmpty;
@@ -570,21 +685,23 @@ class Board {
     return false;
   }
 
-  /// 洗牌直到有解且无现成三连。
+  /// 洗牌直到有解且无现成三连（冰冻糖不动）。
   void shuffleUntilPlayable() {
+    final movable = <Pos>[];
     final cells = <Cell>[];
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
-        if (grid[r][c] != null) cells.add(grid[r][c]!);
+        final p = Pos(r, c);
+        if (grid[r][c] != null && obstacleAt(p) != ObstacleType.ice) {
+          movable.add(p);
+          cells.add(grid[r][c]!);
+        }
       }
     }
     for (var attempt = 0; attempt < 100; attempt++) {
       cells.shuffle(_rng);
-      var i = 0;
-      for (var r = 0; r < rows; r++) {
-        for (var c = 0; c < cols; c++) {
-          if (grid[r][c] != null) grid[r][c] = cells[i++];
-        }
+      for (var i = 0; i < movable.length; i++) {
+        grid[movable[i].row][movable[i].col] = cells[i];
       }
       if (_findMatches().isEmpty && hasAnyMove()) return;
     }
@@ -613,10 +730,28 @@ class Board {
         );
     }
     _expandSpecials(toClear, stripes, wraps);
+    final iceBroken = <Pos>[];
+    final cookiesBroken = <Pos>[];
+    // 锤子/炸弹直接砸障碍
+    for (final p in [target, ...toClear]) {
+      switch (obstacleAt(p)) {
+        case ObstacleType.ice:
+          obstacles.remove(p);
+          iceBroken.add(p);
+          toClear.remove(p); // 破冰保糖
+        case ObstacleType.cookie:
+          obstacles.remove(p);
+          cookiesBroken.add(p);
+        case ObstacleType.none:
+          break;
+      }
+    }
+    _processObstacles(toClear, iceBroken, cookiesBroken);
     var score = 0;
     for (final p in toClear) {
       if (at(p) != null) score += 60;
     }
+    score += (iceBroken.length + cookiesBroken.length) * 90;
     final byColor = _countColors(toClear);
     for (final p in toClear) {
       grid[p.row][p.col] = null;
@@ -627,6 +762,8 @@ class Board {
       score: score,
       cascade: 1,
       clearedByColor: byColor,
+      iceBroken: iceBroken,
+      cookiesBroken: cookiesBroken,
       stripesTriggered: stripes,
       wrapsTriggered: wraps,
     );

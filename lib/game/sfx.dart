@@ -21,6 +21,8 @@ class Sfx {
     'stripe.wav': 2,
     'wrap.wav': 2,
     'bomb.wav': 2,
+    'ice.wav': 2,
+    'cookie.wav': 2,
   };
 
   /// 低频音效，普通播放即可
@@ -62,6 +64,8 @@ class Sfx {
   static void stripe() => _play('stripe.wav');
   static void wrap() => _play('wrap.wav');
   static void bomb() => _play('bomb.wav');
+  static void ice() => _play('ice.wav', volume: 0.8);
+  static void cookie() => _play('cookie.wav', volume: 0.9);
   static void shuffleSound() => _play('shuffle.wav', volume: 0.8);
   static void invalid() => _play('invalid.wav', volume: 0.6);
   static void win() => _play('win.wav');
